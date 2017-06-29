@@ -326,7 +326,6 @@ public class SystemWebChromeClient extends WebChromeClient {
                 }
             }, chooserIntent, ACTION_CODE);
         } catch (ActivityNotFoundException e) {
-            Log.w("No activity found to handle file chooser intent.", e);
             filePathsCallback.onReceiveValue(null);
         }
         return true;
