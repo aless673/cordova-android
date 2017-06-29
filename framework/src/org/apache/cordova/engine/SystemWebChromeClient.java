@@ -259,21 +259,74 @@ public class SystemWebChromeClient extends WebChromeClient {
         }, intent, FILECHOOSER_RESULTCODE);
     }
 
+    Uri photoUri;
+
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     @Override
     public boolean onShowFileChooser(WebView webView, final ValueCallback<Uri[]> filePathsCallback, final WebChromeClient.FileChooserParams fileChooserParams) {
-        Intent intent = fileChooserParams.createIntent();
+        // Check and use MIME Type.
+        String mimeType = "*/*";
+        int ACTION_CODE = FILECHOOSER_RESULTCODE;
+        try {
+            if (fileChooserParams.getAcceptTypes().length > 0) {
+                mimeType = fileChooserParams.getAcceptTypes()[0];
+            } else {
+                mimeType = "*/*";
+            }
+        } catch (Exception e) {
+            mimeType = "*/*";
+        };
+
+        // Check if Mutiple is specified
+        Boolean selectMultiple = false;
+        if (fileChooserParams.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
+            selectMultiple = true;
+        };
+
+        Intent intent = new Intent();
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        if (selectMultiple) { intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); };
+        intent.setType(mimeType);
+        ACTION_CODE = FILECHOOSER_RESULTCODE;
+        final Intent chooserIntent = Intent.createChooser(intent, "Select Source");
+
         try {
             parentEngine.cordova.startActivityForResult(new CordovaPlugin() {
                 @Override
                 public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-                    Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, intent);
-                    LOG.d(LOG_TAG, "Receive file chooser URL: " + result);
-                    filePathsCallback.onReceiveValue(result);
+                    if (resultCode ==  Activity.RESULT_OK && intent != null) {
+                        if (intent.getData() != null)
+                        {
+                            Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, intent);
+                            filePathsCallback.onReceiveValue(result);
+                        }
+                        else
+                        {
+                            if (intent.getClipData() != null) {
+                                final int numSelectedFiles = intent.getClipData().getItemCount();
+                                Uri[] result = new Uri[numSelectedFiles];
+                                for (int i = 0; i < numSelectedFiles; i++) {
+                                    result[i] = intent.getClipData().getItemAt(i).getUri();
+                                }
+                                filePathsCallback.onReceiveValue(result);
+                            }
+                            else {
+                                filePathsCallback.onReceiveValue(null);
+                            }
+                        }
+                    }
+                    else if(resultCode ==  Activity.RESULT_OK && (intent == null || intent.getData() == null )) {
+                        Uri[] result = new Uri[1];
+                        result[0] = photoUri;
+                        filePathsCallback.onReceiveValue(result);
+                    } else {
+                        filePathsCallback.onReceiveValue(null);
+                    }
                 }
-            }, intent, FILECHOOSER_RESULTCODE);
+            }, chooserIntent, ACTION_CODE);
         } catch (ActivityNotFoundException e) {
-            LOG.w("No activity found to handle file chooser intent.", e);
+            Log.w("No activity found to handle file chooser intent.", e);
             filePathsCallback.onReceiveValue(null);
         }
         return true;
